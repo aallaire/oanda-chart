@@ -7,8 +7,9 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.5"
-oanda-candles = "^0.0.4"
+oanda-candles = "^0.0.6"
 forex-types = "^0.0.6"
+tk-oddbox = "^0.0.3"
 
 [tool.poetry.dev-dependencies]
 

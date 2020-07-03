@@ -1,7 +1,7 @@
 from oanda_candles import CandleSequence, Gran, CandleRequester
 from oanda_candles.candle import Candle
 from oanda_candles.ohlc import Ohlc
-from forex_types import Pair, Price, FracPips
+from forex_types import Pair, Price
 from oanda_candles.quote_kind import QuoteKind
 from tkinter import ALL, Canvas, CENTER, Frame, Widget
 from typing import Optional
@@ -10,6 +10,8 @@ from oanda_chart.fonts import Fonts
 from oanda_chart.colors import DarkColors
 from magic_kind import MagicKind
 from oanda_chart.price_coords import PriceCoords
+from oanda_chart.price_scale import PriceScale
+from oanda_chart.initializer import Initializer
 
 
 class Tags(MagicKind):
@@ -54,6 +56,7 @@ class OandaChart(Frame):
         cls._oanda_token = token
 
     def __init__(self, parent: Widget):
+        Initializer.initialize(parent.winfo_toplevel())
         Frame.__init__(self, parent)
         self.canvas = Canvas(
             self,
@@ -66,13 +69,14 @@ class OandaChart(Frame):
         self.quote_kind: Optional[QuoteKind] = None
         self.candles: Optional[CandleSequence] = None
         self.coords: Optional[PriceCoords] = None
+        self.price_scale: Optional[PriceScale] = None
         grid(self.canvas, 0, 0)
 
     def clear(self):
         """Clear away all loaded instance data and elements of canvas."""
         self.canvas.delete(Tags.ALL)
         self.pair = self.gran = self.quote_kind = None
-        self.candles = self.coords = None
+        self.candles = self.coords = self.price_scale = None
 
     def create_priceline(self, price: Price, **kwargs):
         """Create horizontal line across canvas at given price.
@@ -148,29 +152,29 @@ class OandaChart(Frame):
         requester = CandleRequester(self._oanda_token, pair, gran)
         self.candles = requester.request(count=self.NUM_CANDLE)
         self.canvas.delete(Tags.ALL)
-        self._update_badge()
         if not self.candles:
             return
         self.coords: PriceCoords = PriceCoords.from_candle_sequence(
             self.HEIGHT, self.CANDLE_OFFSET, self.candles
         )
-        for num in range(len(self.candles)):
-            self._draw_candle(num)
+        self.price_scale = PriceScale(self.pair, self.coords)
+        self._draw_items()
 
-    def update(self, token=None):
-        pass
+    def update_pair(self, pair: Pair):
+        """Update the pair and load data."""
+        new_gran = Gran.H1 if self.gran is None else self.gran
+        new_quote_kind = QuoteKind.MID if self.quote_kind is None else self.quote_kind
+        self.load(pair, new_gran, new_quote_kind)
 
-    def _update_badge(self):
-        self.canvas.delete(Tags.BADGE)
+    def _draw_items(self):
+        self.canvas.delete(Tags.ALL)
+        # draw text badges with info in corners
         kwargs = {
             "fill": self.Colors.BADGE,
             "justify": CENTER,
             "tags": Tags.BADGE,
-            "text": f"{self.gran}\n{self.pair.camel()}\n{self.quote_kind}",
+            "text": f"{self.pair.camel()}\n{self.gran}\n{self.quote_kind}\n{self.price_scale.interval}",
         }
-        self.canvas.create_text(
-            self.MID_X, self.MID_Y, font=Fonts.GIANT, **kwargs,
-        )
         self.canvas.create_text(
             self.TAG_LEFT, self.TAG_TOP, font=Fonts.TIMES, **kwargs,
         )
@@ -183,3 +187,9 @@ class OandaChart(Frame):
         self.canvas.create_text(
             self.TAG_RIGHT, self.TAG_BOTTOM, font=Fonts.TIMES, **kwargs,
         )
+        # Draw grid lines.
+        for price in self.price_scale:
+            self.create_priceline(price, fill=self.Colors.GRID)
+        # Draw candles
+        for num in range(len(self.candles)):
+            self._draw_candle(num)

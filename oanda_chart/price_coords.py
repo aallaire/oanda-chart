@@ -54,10 +54,6 @@ class PriceCoords:
                 high_price = candle.ask.h
         delta_pips = high_price.pips - low_price.pips
         pip_pad = max(Decimal("1"), delta_pips / 20)
-        print(f"Low  Price: {low_price}")
-        print(f"High Price: {high_price}")
-        print(f"delta_pips is {delta_pips}")
-        print(f"PAD IS {pip_pad}")
         low_price = low_price.add_pips(-pip_pad)
         high_price = high_price.add_pips(pip_pad)
         low = FracPips.from_price(low_price)
