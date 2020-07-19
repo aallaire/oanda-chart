@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "oanda-chart"
-version = "0.0.1"
+version = "0.0.2"
 description = "Oanda forex candle chart tkinter widget."
 authors = ["Andrew Allaire <andrew.allaire@gmail.com>"]
 license = "MIT"
+readme = "Readme.md"
+repository = "https://github.com/aallaire/oanda-chart"
 
 [tool.poetry.dependencies]
 python = "^3.5"

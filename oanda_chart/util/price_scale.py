@@ -1,5 +1,5 @@
 from forex_types import Price, FracPips, Pair
-from oanda_chart.price_coords import PriceCoords
+from oanda_chart.util.price_coords import PriceCoords
 import math
 
 

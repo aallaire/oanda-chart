@@ -1,17 +1,21 @@
-from oanda_candles import CandleSequence, Gran, CandleRequester
-from oanda_candles.candle import Candle
-from oanda_candles.ohlc import Ohlc
-from forex_types import Pair, Price
-from oanda_candles.quote_kind import QuoteKind
-from tkinter import ALL, Canvas, CENTER, Frame, Widget
+from tkinter import ALL, Canvas, CENTER, Frame, Widget, StringVar
 from typing import Optional
-from oanda_chart.syntax_candy import grid
-from oanda_chart.fonts import Fonts
-from oanda_chart.colors import DarkColors
+
+from oanda_candles import CandleSequence, Gran, CandleRequester
+from oanda_candles.ohlc import Ohlc
+from oanda_candles.quote_kind import QuoteKind
+from oanda_candles.candle import Candle
+from forex_types import Pair, Price
 from magic_kind import MagicKind
-from oanda_chart.price_coords import PriceCoords
-from oanda_chart.price_scale import PriceScale
-from oanda_chart.initializer import Initializer
+
+from oanda_chart.util.price_coords import PriceCoords
+from oanda_chart.util.price_scale import PriceScale
+from oanda_chart.util.syntax_candy import grid
+from oanda_chart.env.fonts import Fonts
+from oanda_chart.env.colors import DarkColors
+from oanda_chart.env.const import SelectType
+from oanda_chart.env.link_color import LinkColor
+from oanda_chart.env.initializer import Initializer
 
 
 class Tags(MagicKind):
@@ -55,7 +59,16 @@ class OandaChart(Frame):
         """
         cls._oanda_token = token
 
-    def __init__(self, parent: Widget):
+    def __init__(
+        self,
+        parent: Widget,
+        chart_manager,
+        pair_color: LinkColor,
+        gran_color: LinkColor,
+        quote_kind_color: LinkColor,
+    ):
+        """Do NOT initialize directly, use ChartManager.get_chart method"""
+
         Initializer.initialize(parent.winfo_toplevel())
         Frame.__init__(self, parent)
         self.canvas = Canvas(
@@ -64,13 +77,91 @@ class OandaChart(Frame):
             height=self.HEIGHT,
             background=self.Colors.BACKGROUND,
         )
-        self.pair: Optional[Pair] = None
-        self.gran: Optional[Gran] = None
-        self.quote_kind: Optional[QuoteKind] = None
+        self.manager = chart_manager
         self.candles: Optional[CandleSequence] = None
         self.coords: Optional[PriceCoords] = None
         self.price_scale: Optional[PriceScale] = None
+        self.pair_color: LinkColor = pair_color
+        self.gran_color: LinkColor = gran_color
+        self.quote_kind_color: LinkColor = quote_kind_color
+        self.pair: Optional[Pair] = None
+        self.gran: Optional[Gran] = None
+        self.quote_kind: Optional[QuoteKind] = None
         grid(self.canvas, 0, 0)
+
+    # ---------------------------------------------------------------------------
+    # Method for setting pair, gran, and quote_kind in chart
+    # ---------------------------------------------------------------------------
+
+    def set_pair_color(self, link_color: LinkColor):
+        if self.pair_color != link_color:
+            self.pair_color = link_color
+            pair = self.manager.get_pair(link_color)
+            self.set_pair(pair)
+
+    def set_gran_color(self, link_color: LinkColor):
+        if self.gran_color != link_color:
+            self.gran_color = link_color
+            gran = self.manager.get_gran(link_color)
+            self.set_gran(gran)
+
+    def set_quote_kind_color(self, link_color: LinkColor):
+        if self.quote_kind_color != link_color:
+            self.quote_kind_color = link_color
+            quote_kind = self.manager.get_quote_kind(link_color)
+            self.set_quote_kind(quote_kind)
+
+    def apply_pair(self, pair: Pair):
+        self.manager.set_pair(self.pair_color, pair)
+        self.set_pair(pair)
+
+    def apply_gran(self, gran: Gran):
+        self.manager.set_gran(self.gran_color, gran)
+        self.set_gran(gran)
+
+    def apply_quote_kind(self, quote_kind: QuoteKind):
+        self.manager.set_quote_kind(self.quote_kind_color, quote_kind)
+        self.set_quote_kind(quote_kind)
+
+    def set_pair(self, pair: Pair):
+        """Set the pair and reload data if its new."""
+        if pair != self.pair:
+            self.pair = pair
+            self.load_candles()
+
+    def set_gran(self, gran: Gran):
+        """Set the granularity and reload data if its new."""
+        if gran != self.gran:
+            self.gran = gran
+            self.load_candles()
+
+    def set_quote_kind(self, quote_kind: QuoteKind):
+        """Set the quote kind and reload data if its new."""
+        if quote_kind != self.quote_kind:
+            self.quote_kind = quote_kind
+            self.load_candles()
+
+    # ---------------------------------------------------------------------------
+    # Methods for drawing/clearing elements from chart.
+    # ---------------------------------------------------------------------------
+
+    def load_candles(self):
+        """If the pair, gran, and quote_kind are set, load/reload candles."""
+        if self.pair and self.gran and self.quote_kind:
+            print(f"pair is {self.pair} of type {type(self.pair)}")
+            print(f"gran is {self.gran} of type {type(self.gran)}")
+            print(f"quote_kind is {self.quote_kind} of type {type(self.quote_kind)}")
+            requester = CandleRequester(self.manager.token, self.pair, self.gran)
+            self.candles = requester.request(count=self.NUM_CANDLE)
+            self.canvas.delete(Tags.ALL)
+            if self.candles:
+                self.coords: PriceCoords = PriceCoords.from_candle_sequence(
+                    self.HEIGHT, self.CANDLE_OFFSET, self.candles
+                )
+                self.price_scale = PriceScale(self.pair, self.coords)
+                self._draw_items()
+        else:
+            self.canvas.delete(Tags.ALL)
 
     def clear(self):
         """Clear away all loaded instance data and elements of canvas."""
@@ -102,6 +193,10 @@ class OandaChart(Frame):
         """
         x1, y1, x2, y2 = self.coords.bbox(num1, price1, num2, price2)
         self.canvas.create_rectangle(x1, y1, x2, y2, tags=Tags.RECTANGLE, **kwargs)
+
+    # ---------------------------------------------------------------------------
+    # Internal Methods, not for public use.
+    # ---------------------------------------------------------------------------
 
     def _draw_candle(self, num: int):
         """Draw candle body for candle at specified position in sequence."""
@@ -138,34 +233,6 @@ class OandaChart(Frame):
         y_bottom = max(y_open, y_close)
         self.canvas.create_line(middle, y_bottom, middle, y_low, fill=self.Colors.WICK)
 
-    def load(self, pair: Pair, gran: Gran, quote_kind: QuoteKind):
-        """Load candles (requires oanda token to be set already).
-
-        Args:
-            pair: forex pair to chart prices for. e.g. Pair.EUR_USD
-            gran: granularity/duration of each candle, e.g. Gran.H4
-            quote_kind: whether Bid, Mid, or Ask price
-        """
-        self.pair = pair
-        self.gran = gran
-        self.quote_kind = quote_kind
-        requester = CandleRequester(self._oanda_token, pair, gran)
-        self.candles = requester.request(count=self.NUM_CANDLE)
-        self.canvas.delete(Tags.ALL)
-        if not self.candles:
-            return
-        self.coords: PriceCoords = PriceCoords.from_candle_sequence(
-            self.HEIGHT, self.CANDLE_OFFSET, self.candles
-        )
-        self.price_scale = PriceScale(self.pair, self.coords)
-        self._draw_items()
-
-    def update_pair(self, pair: Pair):
-        """Update the pair and load data."""
-        new_gran = Gran.H1 if self.gran is None else self.gran
-        new_quote_kind = QuoteKind.MID if self.quote_kind is None else self.quote_kind
-        self.load(pair, new_gran, new_quote_kind)
-
     def _draw_items(self):
         self.canvas.delete(Tags.ALL)
         # draw text badges with info in corners
@@ -173,7 +240,7 @@ class OandaChart(Frame):
             "fill": self.Colors.BADGE,
             "justify": CENTER,
             "tags": Tags.BADGE,
-            "text": f"{self.pair.camel()}\n{self.gran}\n{self.quote_kind}\n{self.price_scale.interval}",
+            "text": f"{self.pair.camel()}\n{self.gran.name}\n{self.quote_kind}\n{self.price_scale.interval}",
         }
         self.canvas.create_text(
             self.TAG_LEFT, self.TAG_TOP, font=Fonts.TIMES, **kwargs,

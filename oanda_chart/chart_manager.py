@@ -1,0 +1,107 @@
+import tkinter
+from typing import Optional
+
+from forex_types import Pair
+from oanda_candles import Gran
+from oanda_candles.quote_kind import QuoteKind
+
+from oanda_chart.env.const import Const
+from oanda_chart.env.link_color import LinkColor
+from oanda_chart.widgets.oanda_chart import OandaChart
+from oanda_chart.widgets.gran_menu import GranMenu
+from oanda_chart.widgets.pair_menu import PairMenu
+from oanda_chart.widgets.quote_kind_menu import QuoteKindMenu
+
+
+class ChartManager:
+    def __init__(self, token: str):
+        """Initialize manager.
+
+        Args:
+            token: oanda V20 access token used to get candle data
+        """
+        self.token = token
+        self.charts = set()
+        self.pair_selectors = set()
+        self.gran_selectors = set()
+        self.quote_kind_selectors = set()
+        self.pair_data = {}
+        self.gran_data = {}
+        self.quote_kind_data = {}
+
+    def get_pair(self, color: LinkColor) -> Optional[Pair]:
+        return self.pair_data.get(color)
+
+    def get_gran(self, color: LinkColor) -> Optional[Gran]:
+        return self.gran_data.get(color)
+
+    def get_quote_kind(self, color: LinkColor) -> Optional[QuoteKind]:
+        return self.quote_kind_data.get(color)
+
+    def set_pair(self, color: LinkColor, pair: Optional[Pair]):
+        if pair != self.pair_data.get(color):
+            self.pair_data[color] = pair
+            for chart in self.charts:
+                if chart.pair_color == color:
+                    chart.set_pair(pair)
+            for pair_selector in self.pair_selectors:
+                if pair_selector.color == color:
+                    pair_selector.set_pair(pair)
+
+    def set_gran(self, color: LinkColor, gran: Optional[Gran]):
+        if gran != self.gran_data.get(color):
+            self.gran_data[color] = gran
+            for chart in self.charts:
+                if chart.gran_color == color:
+                    chart.set_gran(gran)
+            for gran_selector in self.gran_selectors:
+                if gran_selector.color == color:
+                    gran_selector.set_gran(gran)
+
+    def set_quote_kind(self, color: LinkColor, quote_kind: Optional[QuoteKind]):
+        if quote_kind != self.quote_kind_data.get(color):
+            self.quote_kind_data[color] = quote_kind
+            for chart in self.charts:
+                if chart.quote_kind_color == color:
+                    chart.set_quote_kind(quote_kind)
+            for quote_kind_selector in self.quote_kind_selectors:
+                if quote_kind_selector.color == color:
+                    quote_kind_selector.set_quote_kind(quote_kind)
+
+    def create_chart(
+        self,
+        parent: tkinter.Widget,
+        pair_color: LinkColor = LinkColor.ChartDefault,
+        gran_color: LinkColor = LinkColor.ChartDefault,
+        quote_kind_color: LinkColor = LinkColor.ChartDefault,
+    ) -> OandaChart:
+        chart = OandaChart(parent, self, pair_color, gran_color, quote_kind_color)
+        chart.set_pair(self.get_pair(pair_color))
+        chart.set_gran(self.get_gran(gran_color))
+        chart.set_quote_kind(self.get_gran(quote_kind_color))
+        self.charts.add(chart)
+        return chart
+
+    def create_pair_menu(
+        self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault
+    ) -> PairMenu:
+        pair_menu = PairMenu(parent, self, color)
+        pair_menu.set_pair(self.get_pair(color))
+        self.pair_selectors.add(pair_menu)
+        return pair_menu
+
+    def create_gran_menu(
+        self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault
+    ) -> GranMenu:
+        gran_menu = GranMenu(parent, self, color)
+        gran_menu.set_gran(self.get_gran(color))
+        self.gran_selectors.add(gran_menu)
+        return gran_menu
+
+    def create_quote_kind_menu(
+        self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault
+    ) -> QuoteKindMenu:
+        quote_kind_menu = QuoteKindMenu(parent, self, color)
+        quote_kind_menu.set_quote_kind(self.get_quote_kind(color))
+        self.quote_kind_selectors.add(quote_kind_menu)
+        return quote_kind_menu
