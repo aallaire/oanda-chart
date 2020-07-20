@@ -13,9 +13,9 @@ from oanda_chart.util.price_scale import PriceScale
 from oanda_chart.util.syntax_candy import grid
 from oanda_chart.env.fonts import Fonts
 from oanda_chart.env.colors import DarkColors
-from oanda_chart.env.const import SelectType
 from oanda_chart.env.link_color import LinkColor
 from oanda_chart.env.initializer import Initializer
+from oanda_chart.widgets.pair_flags import Geometry
 
 
 class Tags(MagicKind):
@@ -66,6 +66,7 @@ class OandaChart(Frame):
         pair_color: LinkColor,
         gran_color: LinkColor,
         quote_kind_color: LinkColor,
+        flags: bool,
     ):
         """Do NOT initialize directly, use ChartManager.get_chart method"""
 
@@ -78,6 +79,17 @@ class OandaChart(Frame):
             background=self.Colors.BACKGROUND,
         )
         self.manager = chart_manager
+        self.pair_menu = chart_manager.create_pair_menu(self, pair_color)
+        if flags:
+            self.pair_flags = chart_manager.create_pair_flags(
+                self, pair_color, geometry=Geometry.ONE_ROW
+            )
+        else:
+            self.pair_flags = None
+        self.gran_menu = chart_manager.create_gran_menu(self, gran_color)
+        self.quote_kind_menu = chart_manager.create_quote_kind_menu(
+            self, quote_kind_color
+        )
         self.candles: Optional[CandleSequence] = None
         self.coords: Optional[PriceCoords] = None
         self.price_scale: Optional[PriceScale] = None
@@ -87,7 +99,13 @@ class OandaChart(Frame):
         self.pair: Optional[Pair] = None
         self.gran: Optional[Gran] = None
         self.quote_kind: Optional[QuoteKind] = None
-        grid(self.canvas, 0, 0)
+        grid(self.pair_menu, 0, 2)
+        grid(self.gran_menu, 0, 3)
+        grid(self.quote_kind_menu, 0, 4)
+        if flags:
+            grid(self.pair_flags, 0, 1)
+        grid(self.canvas, 1, 0, c=5)
+        self.columnconfigure(0, weight=1)
 
     # ---------------------------------------------------------------------------
     # Method for setting pair, gran, and quote_kind in chart
@@ -148,9 +166,6 @@ class OandaChart(Frame):
     def load_candles(self):
         """If the pair, gran, and quote_kind are set, load/reload candles."""
         if self.pair and self.gran and self.quote_kind:
-            print(f"pair is {self.pair} of type {type(self.pair)}")
-            print(f"gran is {self.gran} of type {type(self.gran)}")
-            print(f"quote_kind is {self.quote_kind} of type {type(self.quote_kind)}")
             requester = CandleRequester(self.manager.token, self.pair, self.gran)
             self.candles = requester.request(count=self.NUM_CANDLE)
             self.canvas.delete(Tags.ALL)

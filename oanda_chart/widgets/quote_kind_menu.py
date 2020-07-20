@@ -12,7 +12,6 @@ class QuoteKindMenu(QuoteKindSelector):
     def __init__(self, parent: Widget, chart_manager, color):
         QuoteKindSelector.__init__(self, parent, chart_manager, color)
         self.quote_kind_var = StringVar()
-        self.quote_kind_var.set(QuoteKind.MID.name)
         self.menubutton = Menubutton(
             self,
             textvariable=self.quote_kind_var,
@@ -26,31 +25,31 @@ class QuoteKindMenu(QuoteKindSelector):
             background=color,
             foreground=color.contrast,
             font=Fonts.FIXED_14,
+            tearoff=False,
         )
         self.menubutton["menu"] = self.menu
         self.menu.add_command(
-            self.menu.add_command(
-                label=QuoteKind.ASK.name,
-                command=partial(self.quote_kind_callback, QuoteKind.ASK),
-            )
+            label=QuoteKind.ASK.name,
+            command=partial(self.quote_kind_callback, QuoteKind.ASK),
         )
         self.menu.add_command(
-            self.menu.add_command(
-                label=QuoteKind.MID.name,
-                command=partial(self.quote_kind_callback, QuoteKind.MID),
-            )
+            label=QuoteKind.MID.name,
+            command=partial(self.quote_kind_callback, QuoteKind.MID),
         )
         self.menu.add_command(
-            self.menu.add_command(
-                label=QuoteKind.BID.name,
-                command=partial(self.quote_kind_callback, QuoteKind.BID),
-            )
+            label=QuoteKind.BID.name,
+            command=partial(self.quote_kind_callback, QuoteKind.BID),
         )
         grid(self.menubutton, 0, 0)
-        self.apply_quote_kind(self.quote_kind_var.get())
 
     def set_quote_kind(self, quote_kind: Optional[QuoteKind]):
-        self.quote_kind_var.set(quote_kind)
+        # if quote_kind is None:
+        if not quote_kind:
+            self.quote_kind_var.set("amb")
+            self.menubutton.config(foreground="grey")
+        else:
+            self.quote_kind_var.set(quote_kind)
+            self.menubutton.config(foreground=self.color.contrast)
 
     def quote_kind_callback(self, quote_kind: QuoteKind):
         self.apply_quote_kind(quote_kind)

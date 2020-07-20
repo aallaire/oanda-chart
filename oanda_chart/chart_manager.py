@@ -5,11 +5,11 @@ from forex_types import Pair
 from oanda_candles import Gran
 from oanda_candles.quote_kind import QuoteKind
 
-from oanda_chart.env.const import Const
 from oanda_chart.env.link_color import LinkColor
 from oanda_chart.widgets.oanda_chart import OandaChart
 from oanda_chart.widgets.gran_menu import GranMenu
 from oanda_chart.widgets.pair_menu import PairMenu
+from oanda_chart.widgets.pair_flags import Geometry, PairFlags
 from oanda_chart.widgets.quote_kind_menu import QuoteKindMenu
 
 
@@ -74,11 +74,14 @@ class ChartManager:
         pair_color: LinkColor = LinkColor.ChartDefault,
         gran_color: LinkColor = LinkColor.ChartDefault,
         quote_kind_color: LinkColor = LinkColor.ChartDefault,
+        flags: bool = False,
     ) -> OandaChart:
-        chart = OandaChart(parent, self, pair_color, gran_color, quote_kind_color)
+        chart = OandaChart(
+            parent, self, pair_color, gran_color, quote_kind_color, flags
+        )
         chart.set_pair(self.get_pair(pair_color))
         chart.set_gran(self.get_gran(gran_color))
-        chart.set_quote_kind(self.get_gran(quote_kind_color))
+        chart.set_quote_kind(self.get_quote_kind(quote_kind_color))
         self.charts.add(chart)
         return chart
 
@@ -90,6 +93,17 @@ class ChartManager:
         self.pair_selectors.add(pair_menu)
         return pair_menu
 
+    def create_pair_flags(
+        self,
+        parent: tkinter.Widget,
+        color: LinkColor = LinkColor.ChartDefault,
+        geometry: Optional[Geometry] = None,
+    ) -> PairFlags:
+        pair_flags = PairFlags(parent, self, color, geometry)
+        pair_flags.set_pair(self.get_pair(color))
+        self.pair_selectors.add(pair_flags)
+        return pair_flags
+
     def create_gran_menu(
         self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault
     ) -> GranMenu:
@@ -99,7 +113,7 @@ class ChartManager:
         return gran_menu
 
     def create_quote_kind_menu(
-        self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault
+        self, parent: tkinter.Widget, color: LinkColor = LinkColor.ChartDefault,
     ) -> QuoteKindMenu:
         quote_kind_menu = QuoteKindMenu(parent, self, color)
         quote_kind_menu.set_quote_kind(self.get_quote_kind(color))

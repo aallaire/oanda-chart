@@ -33,8 +33,9 @@ class Selector(Frame):
 
 class PairSelector(Selector):
     SELECT_TYPE: type = Pair
+    BLANK = "pair"
 
-    def apply_pair(self, pair: Pair):
+    def apply_pair(self, pair: Optional[Pair]):
         self.manager.set_pair(self.color, pair)
 
     def get_pair(self):

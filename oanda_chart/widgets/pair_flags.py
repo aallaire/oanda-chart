@@ -43,15 +43,14 @@ from forex_types import Currency, Pair
 from magic_kind import MagicKind
 from tkinter import Frame, Label, Widget, StringVar
 from tk_oddbox import Images
-from typing import Union
+from typing import Union, Optional
 
-from .initializer import Initializer
-from .syntax_candy import grid
+from oanda_chart.env.const import Event
 
-
-class Event(MagicKind):
-    LEFT_CLICK = "<Button-1>"
-    RIGHT_CLICK = "<Button-3>"
+from oanda_chart.env.link_color import LinkColor
+from oanda_chart.widgets.selector import PairSelector
+from oanda_chart.env.initializer import Initializer
+from oanda_chart.util.syntax_candy import grid
 
 
 class Geometry(MagicKind):
@@ -127,22 +126,20 @@ class CurrencyLabel(Label):
             self.selector.apply_values()
 
 
-class PairSelector(Frame):
-    def __init__(self, parent: Widget, color=None, geometry=None):
+class PairFlags(PairSelector):
+    def __init__(self, parent: Widget, chart_manager, color: LinkColor, geometry=None):
         """
+        Args:
             parent: parent widget
-            color: theme color, defaults to green
+            chart_manager: chart manager we are under management of.
+            color: Color that pair selection is linked to.
             geometry: arrangement of flags, defaults to one column.
         """
-        Initializer.initialize(parent.winfo_toplevel())
-        Frame.__init__(self, parent)
-        self.color = "green" if color is None else color
+        PairSelector.__init__(self, parent, chart_manager, color)
         self.geometry = Geometry.ONE_COLUMN if geometry is None else geometry
-        self.charts = []
         self.labels = []
         self.anchor: Currency = None
         self.on: Currency = None
-        self.pair_var = StringVar()
         for currency in Currency.get_list():
             label = CurrencyLabel(self, currency, color)
             self.labels.append(label)
@@ -167,7 +164,19 @@ class PairSelector(Frame):
 
     def apply_values(self):
         """Update everything else based on self.anchor and self.on."""
-        # Update state of labels
+        self._update_labels()
+        # Set Pair Value
+        previous_pair = self.get_pair()
+        if self.anchor and self.on:
+            currencies = sorted([self.anchor, self.on])
+            pair = Pair.from_currency(currencies[0], currencies[1])
+            if pair != previous_pair:
+                self.apply_pair(pair)
+        else:
+            self.apply_pair(None)
+
+    def _update_labels(self):
+        """Helper that updates label based on self.anchor and self.on"""
         for label in self.labels:
             if label.currency == self.anchor:
                 label.set_state(State.ANCHOR)
@@ -175,16 +184,13 @@ class PairSelector(Frame):
                 label.set_state(State.ON)
             else:
                 label.set_state(State.OFF)
-        # Set Pair Value
-        previous_pair = self.pair_var.get()
-        if self.anchor and self.on:
-            currencies = sorted([self.anchor, self.on])
-            pair = Pair.from_currency(currencies[0], currencies[1])
-            if pair != previous_pair:
-                self.pair_var.set(pair.camel())
-                for chart in self.charts:
-                    chart.update_pair(pair)
+
+    def set_pair(self, pair: Optional[Pair]):
+        if pair is None:
+            self.anchor = self.on = None
+        elif pair.quote == self.anchor:
+            self.on = pair.base
         else:
-            self.pair_var.set("")
-            for chart in self.charts:
-                chart.clear()
+            self.anchor = pair.base
+            self.on = pair.quote
+        self._update_labels()

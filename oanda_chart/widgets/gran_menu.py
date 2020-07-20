@@ -26,6 +26,7 @@ class GranMenu(GranSelector):
             background=color,
             foreground=color.contrast,
             font=Fonts.FIXED_14,
+            tearoff=False,
         )
         self.menubutton["menu"] = self.menu
         for item in self.MENU_LAYOUT:
@@ -39,9 +40,11 @@ class GranMenu(GranSelector):
 
     def set_gran(self, gran: Optional[Gran]):
         if gran is None:
-            self.gran_var.set("")
+            self.gran_var.set("gran")
+            self.menubutton.config(foreground="grey")
         else:
             self.gran_var.set(gran.name)
+            self.menubutton.config(foreground=self.color.contrast)
 
     def gran_callback(self, gran: Gran):
         self.apply_gran(gran)

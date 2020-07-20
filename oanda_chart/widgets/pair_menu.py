@@ -26,6 +26,7 @@ class PairMenu(PairSelector):
             background=color,
             foreground=color.contrast,
             font=Fonts.FIXED_14,
+            tearoff=False,
         )
         self.menubutton["menu"] = self.menu
         for pair in Pair.iter_pairs():
@@ -38,9 +39,11 @@ class PairMenu(PairSelector):
 
     def set_pair(self, pair: Optional[Pair]):
         if pair is None:
-            self.pair_var.set("")
+            self.pair_var.set("pair")
+            self.menubutton.config(foreground="grey")
         else:
             self.pair_var.set(pair.camel())
+            self.menubutton.config(foreground=self.color.contrast)
 
     def pair_callback(self, pair: Pair):
         self.apply_pair(pair)
