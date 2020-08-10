@@ -34,6 +34,8 @@ class PriceScale:
         FracPips(25_000_000),
         FracPips(50_000_000),
         FracPips(100_000_000),
+        FracPips(250_000_000),
+        FracPips(500_000_000),
     )
 
     def __init__(self, fpp: float):

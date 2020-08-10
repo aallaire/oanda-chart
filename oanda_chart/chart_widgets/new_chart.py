@@ -64,6 +64,7 @@ class UnfinishedCandleColor:
 
 
 class Event:
+    DOUBLE_CLICK: str = "<Double-Button-1>"
     LEFT_CLICK: str = "<ButtonPress-1>"
     LEFT_DRAG: str = "<B1-Motion>"
     LEFT_RELEASE: str = "<ButtonRelease-1>"
@@ -136,6 +137,7 @@ class NewChart(Canvas):
         self.bind(Event.LEFT_RELEASE, self.scroll_release)
         self.bind(Event.RESIZE, self.resize)
         self.bind(Event.MOUSE_WHEEL, self.squeeze_or_expand)
+        self.bind(Event.DOUBLE_CLICK, self.toggle_price_view)
 
     def load(self, pair: Pair, gran: Gran):
         if pair == self.pair and gran == self.gran and self.collector is not None:
@@ -148,6 +150,8 @@ class NewChart(Canvas):
         self.collector = CandleCollector(self.token, pair, gran)
         self._draw_candles()
         self._enforce_price_view()
+        self.price_scale = PriceScale(self.fpp)
+        self.go_home()
 
     def y_fp(self, fp: FracPips) -> int:
         """Get y pixel coord for given FracPips."""
@@ -157,6 +161,15 @@ class NewChart(Canvas):
         """Get y pixel coord for given price."""
         fp = FracPips.from_price(price)
         return self.y_fp(fp)
+
+    def go_home(self):
+        self.delete(Tag.CANDLE)
+        self.candle_ndx = 0
+        if self.pair is not None:
+            self._draw_candles()
+            if self.price_view:
+                self._enforce_price_view()
+        self.xview_moveto(Const.ONE_THIRD)
 
     # ---------------------------------------------------------------------------
     # Event Callbacks
@@ -207,6 +220,9 @@ class NewChart(Canvas):
             self._apply_offset(new_offset)
             if self.price_view:
                 self._enforce_price_view()
+
+    def toggle_price_view(self, event):
+        self.price_view = not self.price_view
 
     # ---------------------------------------------------------------------------
     # Helpers
@@ -285,9 +301,8 @@ class NewChart(Canvas):
         if self.fpp is None or self.fp_bottom is None or self.fp_top is None:
             return
         if self.price_scale is None:
-            self.price_scale = PriceScale(self.fpp)
+            return
         for grid_fp in self.price_scale.get_grid_list(self.fp_bottom, self.fp_top):
-            print(grid_fp)
             y = self.y_fp(grid_fp)
             self.create_line(
                 0, y, self.scroll_width, y, fill=Color.GRID, tag=Tag.PRICE_GRID
