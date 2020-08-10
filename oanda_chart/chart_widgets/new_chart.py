@@ -28,11 +28,13 @@ from oanda_candles import (
 
 from oanda_chart.geo.candle_offset import CandleOffset
 from oanda_chart.util.candle_range import get_candle_range
+from oanda_chart.chart_widgets.price_scale import PriceScale
 
 
 class Tag:
     CANDLE = "candle"
     MIST = "mist"
+    PRICE_GRID = "pricegrid"
 
 
 class ConfigAttr:
@@ -43,8 +45,8 @@ class ConfigAttr:
 class Color:
     BACKGROUND: str = "#000000"
     BADGE: str = "#212121"
-    GRID: str = "#000000"
-    MIST: str = "#131313"
+    GRID: str = "#333333"
+    MIST: str = "#111111"
 
 
 class CandleColor:
@@ -70,7 +72,7 @@ class Event:
 
 
 class Const:
-    TAIL_PADDING = 50  # num pixels to pad to right of candles when tailing.
+    TAIL_PADDING = 200  # num pixels to pad to right of candles when tailing.
     DEFAULT_FPP = 10.0  # initial frac pips per pixel value before data loaded.
     MIN_FPP = 0.01  # lowest allowed value for fpp
     PRICE_PAD: FracPips = FracPips(10_000)
@@ -120,6 +122,7 @@ class NewChart(Canvas):
         self.full_slots: int = round(full_width / self.offset)
         self.other_slots: int = self.slots - self.full_slots
         self.fpp: float = Const.DEFAULT_FPP
+        self.price_scale: Optional[PriceScale] = None
         Canvas.__init__(
             self,
             master=parent,
@@ -132,10 +135,12 @@ class NewChart(Canvas):
         self.bind(Event.LEFT_DRAG, self.scroll_move)
         self.bind(Event.LEFT_RELEASE, self.scroll_release)
         self.bind(Event.RESIZE, self.resize)
+        self.bind(Event.MOUSE_WHEEL, self.squeeze_or_expand)
 
     def load(self, pair: Pair, gran: Gran):
         if pair == self.pair and gran == self.gran and self.collector is not None:
             return
+        self.price_scale = None
         self.candle_ndx = 0
         self.pair = pair
         self.gran = gran
@@ -143,6 +148,15 @@ class NewChart(Canvas):
         self.collector = CandleCollector(self.token, pair, gran)
         self._draw_candles()
         self._enforce_price_view()
+
+    def y_fp(self, fp: FracPips) -> int:
+        """Get y pixel coord for given FracPips."""
+        return round((self.fp_top - fp) / self.fpp)
+
+    def y_price(self, price: Price) -> int:
+        """Get y pixel coord for given price."""
+        fp = FracPips.from_price(price)
+        return self.y_fp(fp)
 
     # ---------------------------------------------------------------------------
     # Event Callbacks
@@ -170,6 +184,29 @@ class NewChart(Canvas):
 
     def resize(self, event):
         self._apply_resize(width=event.width, height=event.height)
+        if self.candles:
+            self._apply_resize()
+            self._draw_candles()
+            self._apply_resize()
+            if self.price_view:
+                self._apply_resize()
+                self._enforce_price_view()
+
+    def squeeze_or_expand(self, event):
+        """Squeeze candle offset or expand it according to mouse wheel direction."""
+        if not self.candles:
+            return
+        old_offset = self.offset
+        if event.delta > 0:
+            new_offset = CandleOffset(old_offset + 1)
+        elif event.delta < 0:
+            new_offset = CandleOffset(old_offset - 1)
+        else:
+            return
+        if new_offset != old_offset:
+            self._apply_offset(new_offset)
+            if self.price_view:
+                self._enforce_price_view()
 
     # ---------------------------------------------------------------------------
     # Helpers
@@ -192,11 +229,18 @@ class NewChart(Canvas):
         self.other_slots = self.slots - self.full_slots
         self.config(scrollregion=(0, 0, self.scroll_width, self.scroll_height))
 
+    def _apply_offset(self, offset: CandleOffset):
+        """Apply a new offset (candle width) to chart."""
+        self.offset = CandleOffset(offset)
+        self._apply_resize()
+        self._draw_candles()
+
     def _draw_candles(self):
         self._pull_candles()
         self._find_top_and_bottom()
         self._apply_resize()
         self._draw_mist()
+        self._draw_price_grid()
         self.delete(Tag.CANDLE)
         num_to_draw = self.slots - self.missing_history - self.future_slots
         for ndx in range(num_to_draw):
@@ -235,6 +279,19 @@ class NewChart(Canvas):
             x_right = self.slots * self.offset
             x_left = x_right - (self.future_slots * self.offset)
             self._mist_at(x_left, 0, x_right, self.scroll_height)
+
+    def _draw_price_grid(self):
+        self.delete(Tag.PRICE_GRID)
+        if self.fpp is None or self.fp_bottom is None or self.fp_top is None:
+            return
+        if self.price_scale is None:
+            self.price_scale = PriceScale(self.fpp)
+        for grid_fp in self.price_scale.get_grid_list(self.fp_bottom, self.fp_top):
+            print(grid_fp)
+            y = self.y_fp(grid_fp)
+            self.create_line(
+                0, y, self.scroll_width, y, fill=Color.GRID, tag=Tag.PRICE_GRID
+            )
 
     def _enforce_price_view(self):
         """Adjust so that prices fill screen."""
@@ -288,12 +345,3 @@ class NewChart(Canvas):
         self.candles = self.collector.grab(request_num)  # candles back to first we need
         self.missing_history = request_num - len(self.candles)
         self.future_slots = max(0, self.other_slots - self.candle_ndx)
-
-    def y_fp(self, fp: FracPips) -> int:
-        """Get y pixel coord for given FracPips."""
-        return round((self.fp_top - fp) / self.fpp)
-
-    def y_price(self, price: Price) -> int:
-        """Get y pixel coord for given price."""
-        fp = FracPips.from_price(price)
-        return self.y_fp(fp)
