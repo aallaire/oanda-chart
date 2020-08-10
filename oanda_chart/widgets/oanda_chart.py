@@ -1,7 +1,7 @@
 from tkinter import ALL, Canvas, CENTER, Frame, Widget, StringVar
-from typing import Optional
+from typing import Optional, Tuple
 
-from oanda_candles import CandleSequence, Gran, CandleRequester
+from oanda_candles import CandleSequence, Gran, CandleCollector
 from oanda_candles.ohlc import Ohlc
 from oanda_candles.quote_kind import QuoteKind
 from oanda_candles.candle import Candle
@@ -23,7 +23,15 @@ class Tags(MagicKind):
     BADGE = "badge"
     CANDLE = "candle"
     LINE = "line"
+    PRICE_LINE = "price_line"
     RECTANGLE = "rectangle"
+    REGION = "region"
+
+
+class PriceLine:
+    def __init__(self, price: Price, **kwargs):
+        self.price = price
+        self.kwargs = kwargs
 
 
 class OandaChart(Frame):
@@ -99,6 +107,7 @@ class OandaChart(Frame):
         self.pair: Optional[Pair] = None
         self.gran: Optional[Gran] = None
         self.quote_kind: Optional[QuoteKind] = None
+        self.price_lines = []
         grid(self.pair_menu, 0, 2)
         grid(self.gran_menu, 0, 3)
         grid(self.quote_kind_menu, 0, 4)
@@ -106,6 +115,14 @@ class OandaChart(Frame):
             grid(self.pair_flags, 0, 1)
         grid(self.canvas, 1, 0, c=5)
         self.columnconfigure(0, weight=1)
+        self.canvas.bind("<ButtonPress-1>", self.scroll_start)
+        self.canvas.bind("<B1-Motion>", self.scroll_move)
+
+    def scroll_start(self, event):
+        self.canvas.scan_mark(event.x, event.y)
+
+    def scroll_move(self, event):
+        self.canvas.scan_dragto(event.x, event.y, gain=1)
 
     # ---------------------------------------------------------------------------
     # Method for setting pair, gran, and quote_kind in chart
@@ -166,8 +183,8 @@ class OandaChart(Frame):
     def load_candles(self):
         """If the pair, gran, and quote_kind are set, load/reload candles."""
         if self.pair and self.gran and self.quote_kind:
-            requester = CandleRequester(self.manager.token, self.pair, self.gran)
-            self.candles = requester.request(count=self.NUM_CANDLE)
+            collector = CandleCollector(self.manager.token, self.pair, self.gran)
+            self.candles = collector.grab(self.NUM_CANDLE)
             self.canvas.delete(Tags.ALL)
             if self.candles:
                 self.coords: PriceCoords = PriceCoords.from_candle_sequence(
@@ -191,8 +208,15 @@ class OandaChart(Frame):
             price: Price to draw horizontal line at
             **kwargs: keyword arguments to pass to canvas create_line method
         """
-        y = self.coords.y(price)
-        self.canvas.create_line(0, y, self.WIDTH, y, tags=Tags.LINE, **kwargs)
+        x1, y1, x2, y2 = self._get_region()
+        x1 = -100_000_000
+        x2 = 100_000_000
+        y_price = self.coords.y(price)
+        tag_num = self.canvas.create_line(
+            x1, y_price, x2, y_price, tags=Tags.PRICE_LINE, **kwargs
+        )
+        price_line = PriceLine(price, **kwargs)
+        self.price_lines.append((price_line, tag_num))
 
     def create_rectangle(
         self, num1: int, price1: Price, num2: int, price2: Price, **kwargs,
@@ -213,6 +237,39 @@ class OandaChart(Frame):
     # Internal Methods, not for public use.
     # ---------------------------------------------------------------------------
 
+    def _get_region(self) -> Tuple[int, int, int, int]:
+        """Determine what scroll region should be right now.
+
+        If there are any REGION tagged items drawn, then the region will e a
+        bounding box around them padded by a screen width to the left and 100
+        pixels to the right.
+
+        Otherwise, in the special case where no items are drawn in the canvas
+        the region is just matches the screen height and width.
+        """
+        region_tuple = self.canvas.bbox(Tags.REGION)
+        if region_tuple is None:
+            return 0, 0, self.WIDTH, self.HEIGHT
+        else:
+            x1, y1, x2, y2 = region_tuple
+            return x1 - self.WIDTH, y1, x2 + 100, y2
+
+    def _update_region(self):
+        """Adjust scrollable region and lines to match what is drawn.
+
+        We do the following:
+           1) Expand scrollable region to fit drawn objects as they now are,
+              plus pad 100 pixels to the right, and the screen width to left.
+           2) Expand the length of lines to cross the entire region.
+        """
+        region = self._get_region()
+        self.canvas.config(scrollregion=region)
+        old_price_lines = self.price_lines
+        self.price_lines = []
+        for price_line, tag_num in old_price_lines:
+            self.canvas.delete(tag_num)
+            self.create_priceline(price_line.price, **price_line.kwargs)
+
     def _draw_candle(self, num: int):
         """Draw candle body for candle at specified position in sequence."""
         candle: Candle = self.candles[num]
@@ -230,7 +287,12 @@ class OandaChart(Frame):
         pixel_height = y_open - y_close
         if pixel_height > 2:
             self.canvas.create_rectangle(
-                left, y_open, right, y_close, tags=Tags.CANDLE, fill=self.Colors.BULL
+                left,
+                y_open,
+                right,
+                y_close,
+                tags=(Tags.CANDLE, Tags.REGION),
+                fill=self.Colors.BULL,
             )
         elif pixel_height < -2:
             self.canvas.create_rectangle(
@@ -247,6 +309,7 @@ class OandaChart(Frame):
         # Draw lower wick
         y_bottom = max(y_open, y_close)
         self.canvas.create_line(middle, y_bottom, middle, y_low, fill=self.Colors.WICK)
+        self._update_region()
 
     def _draw_items(self):
         self.canvas.delete(Tags.ALL)
@@ -275,3 +338,4 @@ class OandaChart(Frame):
         # Draw candles
         for num in range(len(self.candles)):
             self._draw_candle(num)
+        self._update_region()

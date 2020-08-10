@@ -43,7 +43,6 @@ class QuoteKindMenu(QuoteKindSelector):
         grid(self.menubutton, 0, 0)
 
     def set_quote_kind(self, quote_kind: Optional[QuoteKind]):
-        # if quote_kind is None:
         if not quote_kind:
             self.quote_kind_var.set("amb")
             self.menubutton.config(foreground="grey")

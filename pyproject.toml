@@ -9,7 +9,7 @@ repository = "https://github.com/aallaire/oanda-chart"
 
 [tool.poetry.dependencies]
 python = "^3.5"
-oanda-candles = "^0.0.6"
+oanda-candles = "^0.0.8"
 forex-types = "^0.0.6"
 tk-oddbox = "^0.0.3"
 
