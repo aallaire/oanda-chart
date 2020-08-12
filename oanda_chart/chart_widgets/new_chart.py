@@ -15,8 +15,10 @@ There are two kinds of coordinates:
 """
 
 
-from typing import List, Optional
+from typing import List, Optional, Set
 from tkinter import Widget, Canvas
+from uuid import uuid4
+
 from forex_types import FracPips, Pair, Price
 
 from oanda_candles import (
@@ -73,7 +75,7 @@ class Event:
 
 
 class Const:
-    TAIL_PADDING = 200  # num pixels to pad to right of candles when tailing.
+    TAIL_PADDING = 100  # num pixels to pad to right of candles when tailing.
     DEFAULT_FPP = 10.0  # initial frac pips per pixel value before data loaded.
     MIN_FPP = 0.01  # lowest allowed value for fpp
     PRICE_PAD: FracPips = FracPips(10_000)
@@ -99,7 +101,8 @@ class NewChart(Canvas):
         # Misc Attributes
         self.token = token
         self.marked_x: Optional[int] = None
-        self.tailing: bool = True
+        self.tailing: bool = False
+        self.tail_lock_set: Set[str] = set()
         self.price_view: bool = True
         self.missing_history: int = 0
         self.future_slots: int = 0
@@ -148,7 +151,7 @@ class NewChart(Canvas):
         self.gran = gran
         self.fpp = Const.DEFAULT_FPP
         self.collector = CandleCollector(self.token, pair, gran)
-        self._draw_candles()
+        self._update_candles()
         self._enforce_price_view()
         self.price_scale = PriceScale(self.fpp)
         self.go_home()
@@ -165,11 +168,15 @@ class NewChart(Canvas):
     def go_home(self):
         self.delete(Tag.CANDLE)
         self.candle_ndx = 0
+        self.price_view = True
+        self.offset = CandleOffset.DEFAULT
         if self.pair is not None:
-            self._draw_candles()
-            if self.price_view:
-                self._enforce_price_view()
+            self._update_candles()
+            self._enforce_price_view()
+            self._update_candles()
         self.xview_moveto(Const.ONE_THIRD)
+        self.tailing = True
+        self._start_tail()
 
     # ---------------------------------------------------------------------------
     # Event Callbacks
@@ -190,16 +197,21 @@ class NewChart(Canvas):
         if self.candle_ndx < 0:
             self.candle_ndx = 0
         if self.pair is not None:
-            self._draw_candles()
+            self._update_candles()
             if self.price_view:
                 self._enforce_price_view()
         self.xview_moveto(Const.ONE_THIRD)
+        if self._end_in_sight():
+            self.tailing = True
+            self._start_tail()
+        else:
+            self.tailing = False
 
     def resize(self, event):
         self._apply_resize(width=event.width, height=event.height)
         if self.candles:
             self._apply_resize()
-            self._draw_candles()
+            self._update_candles()
             self._apply_resize()
             if self.price_view:
                 self._apply_resize()
@@ -220,6 +232,11 @@ class NewChart(Canvas):
             self._apply_offset(new_offset)
             if self.price_view:
                 self._enforce_price_view()
+            if self._end_in_sight():
+                self.tailing = True
+                self._start_tail()
+            else:
+                self.tailing = False
 
     def toggle_price_view(self, event):
         self.price_view = not self.price_view
@@ -227,6 +244,47 @@ class NewChart(Canvas):
     # ---------------------------------------------------------------------------
     # Helpers
     # ---------------------------------------------------------------------------
+
+    def _end_in_sight(self) -> bool:
+        """Determine if last candles are visible in view (or at least close)."""
+        pixels_from_end = self.candle_ndx * self.offset
+        return pixels_from_end < Const.TAIL_PADDING
+
+    def _start_tail(self):
+        if not self.tailing or self.tail_lock_set:
+            return
+        tail_lock = str(uuid4())
+        self.tail_lock_set.add(tail_lock)
+        self.after(2000, self._tail, tail_lock)
+
+    def _tail(self, tail_lock: str):
+        if not self.candles or not self.tailing or tail_lock not in self.tail_lock_set:
+            if tail_lock in self.tail_lock_set:
+                self.tail_lock_set.remove(tail_lock)
+            return
+        # If other locks, then exit unless our lock is first alphabetically
+        if len(self.tail_lock_set) > 1:
+            for other_lock in self.tail_lock_set:
+                if other_lock < tail_lock:
+                    return
+        last_candle = self.candles[-1]
+        new_candles = self.collector.grab(10)
+        found_match = False
+        for new_candle in new_candles:
+            if found_match:
+                self.candles.append(new_candle)
+            if new_candle.time == last_candle.time:
+                found_match = True
+                self.candles[-1] = new_candle
+        if found_match:
+            # For when the grab of 10 candles did not overlap with the latest candle
+            # we already had...we go ahead and do the regular redraw of candles.
+            self._update_candles()
+            self._apply_resize()
+        else:
+            self._find_top_and_bottom()
+        if self.tailing:
+            self.after(2000, self._tail, tail_lock)
 
     def _apply_resize(self, width: Optional[int] = None, height: Optional[int] = None):
         """Adjust attributes to reflect current width and height."""
@@ -249,14 +307,17 @@ class NewChart(Canvas):
         """Apply a new offset (candle width) to chart."""
         self.offset = CandleOffset(offset)
         self._apply_resize()
-        self._draw_candles()
+        self._update_candles()
 
-    def _draw_candles(self):
+    def _update_candles(self):
         self._pull_candles()
         self._find_top_and_bottom()
         self._apply_resize()
         self._draw_mist()
         self._draw_price_grid()
+        self._draw_candles()
+
+    def _draw_candles(self):
         self.delete(Tag.CANDLE)
         num_to_draw = self.slots - self.missing_history - self.future_slots
         for ndx in range(num_to_draw):
@@ -294,6 +355,9 @@ class NewChart(Canvas):
         if self.future_slots:
             x_right = self.slots * self.offset
             x_left = x_right - (self.future_slots * self.offset)
+            if not self.candles[-1].complete:
+                # extend future mist to cover the last candle if its not complete.
+                x_left -= self.offset
             self._mist_at(x_left, 0, x_right, self.scroll_height)
 
     def _draw_price_grid(self):
@@ -335,7 +399,7 @@ class NewChart(Canvas):
         fp_delta = fp_max - fp_min
         target_height = self.view_height - (2 * Const.PRICE_VIEW_PAD)
         self.fpp = max((fp_delta / target_height), Const.MIN_FPP)
-        self._draw_candles()
+        self._update_candles()
         pixels_down = self.y_fp(fp_max) - Const.PRICE_VIEW_PAD
         percent_down = float(pixels_down) / float(self.scroll_height)
         self.yview_moveto(percent_down)
