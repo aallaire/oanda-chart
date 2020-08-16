@@ -6,7 +6,7 @@ from oanda_candles import Gran
 from oanda_candles.quote_kind import QuoteKind
 
 from oanda_chart.env.link_color import LinkColor
-from oanda_chart.widgets.oanda_chart import OandaChart
+from oanda_chart.chart_widgets.oanda_chart import OandaChart
 from oanda_chart.widgets.gran_menu import GranMenu
 from oanda_chart.widgets.pair_menu import PairMenu
 from oanda_chart.widgets.pair_flags import Geometry, PairFlags
@@ -21,6 +21,7 @@ class ChartManager:
             token: oanda V20 access token used to get candle data
         """
         self.token = token
+        OandaChart.set_oanda_token(token)
         self.charts = set()
         self.pair_selectors = set()
         self.gran_selectors = set()

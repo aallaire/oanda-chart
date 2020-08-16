@@ -1,3 +1,0 @@
-class GeoItem:
-
-    TAG = None

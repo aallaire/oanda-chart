@@ -1,89 +1,193 @@
-from typing import List, Tuple, Optional
-from tkinter import Widget, Canvas, Button
-import math
+"""Refresher reference for canvas coordinates:
 
-from oanda_candles import QuoteKind, CandleMeister, Pair, Gran
+There are two kinds of coordinates:
+    View Coordinates:
+        * Its height and width depend on the user resizing the canvas widget.
+        * This is the width and height of the canvas widget itself.
+        * It is only a view of part of the whole canvas though.
+        * to see how many pixels it is to the left of whole canvas: canvas_obj.canvasx(0)
+        * to see how many pixels down from top of whole canvas: canvas_obj.canvasy(0)
 
-from oanda_chart.geo.coords import Coords
-from oanda_chart.geo.candles_element import CandlesElement
+    Scroll Coordinates/Canvas Coordinates:
+        * The height and width of the entire area one can pan or scroll the view over.
+        * This is configured as the scrollregion box of the canvas widget.
+        * When you create items on the canvas, you give them these coordinates.
+"""
+
+
+from typing import List, Optional, Set
+from tkinter import Widget, Canvas
+from uuid import uuid4
+
+from forex_types import FracPips, Pair, Price, Currency
+
+from oanda_candles import (
+    QuoteKind,
+    Gran,
+    Candle,
+    CandleCollector,
+)
+
 from oanda_chart.geo.candle_offset import CandleOffset
-
-
-class Tag:
-    CANDLE = "candle"
-
-
-class Color:
-    BACKGROUND: str = "#000000"
-    BADGE: str = "#212121"
-    GRID: str = "#111111"
-
-
-class CandleColor:
-    BULL: str = "#00FF00"
-    BEAR: str = "#FF0000"
-    DOJI: str = "#aaaaaa"
-    WICK: str = "#999999"
-
-
-class UnfinishedCandleColor:
-    BULL: str = "#447744"
-    BEAR: str = "#774444"
-    WICK: str = "#777777"
-    DOJI: str = "#aaaaaa"
-
-
-class Event:
-    LEFT_CLICK: str = "<ButtonPress-1>"
-    LEFT_DRAG: str = "<B1-Motion>"
-    MOUSE_WHEEL: str = "<MouseWheel>"
-    RESIZE: str = "<Configure>"
+from oanda_chart.util.candle_range import get_candle_range
+from oanda_chart.chart_widgets.price_scale import PriceScale
+from oanda_chart.env.const import (
+    CandleColor,
+    Color,
+    Const,
+    Event,
+    Tag,
+    UnfinishedCandleColor,
+)
 
 
 class ChartCanvas(Canvas):
     def __init__(self, parent: Widget, width: int = 1200, height: int = 700):
-        self.coords = Coords()
-        region = (0, 0, self.coords.width, self.coords.height)
+        """Initialize chart canvas.
+        
+        Args:
+            parent: tkinter widget canvas should belong to
+            width: width to make canvas in pixels (viewable area)
+            height: height to make canvas in pixels (viewable area)
+        Attributes (not all set upon initialization).
+        """
+        # Misc Attributes
+        self.token: Optional[str] = None
+        self.marked_x: Optional[int] = None
+        self.tailing: bool = False
+        self.tail_lock_set: Set[str] = set()
+        self.price_view: bool = True
+        self.missing_history: int = 0
+        self.future_slots: int = 0
+        # Candle Data Attributes
+        self.candles: Optional[List[Candle]] = None
+        self.candle_ndx: int = 0
+        self.collector: Optional[CandleCollector] = None
+        self.gran: Optional[Gran] = None
+        self.pair: Optional[Pair] = None
+        self.quote_kind: QuoteKind = QuoteKind.MID
+        self.fp_top: Optional[FracPips] = None
+        self.fp_bottom: Optional[FracPips] = None
+        # Size/Coordinates Attributes (updated by resize)
+        self.view_width: int = width
+        self.view_height: int = height
+        self.scroll_width: int = width * 3
+        self.scroll_height: int = height * 3
+        self.offset: CandleOffset = CandleOffset.DEFAULT
+        self.slots: int = int(self.scroll_width / self.offset)
+        full_width = (2 * self.view_width) - Const.TAIL_PADDING
+        self.full_slots: int = round(full_width / self.offset)
+        self.other_slots: int = self.slots - self.full_slots
+        self.fpp: float = Const.DEFAULT_FPP
+        self.price_scale: Optional[PriceScale] = None
         Canvas.__init__(
             self,
             master=parent,
             background=Color.BACKGROUND,
             height=height,
-            scrollregion=region,
+            scrollregion=(0, 0, width * 3, height * 3),
             width=width,
         )
-        self.view_price_mode: bool = False
-        self.loaded: bool = False
-        self.target_count = 0
-        self.max_count = 2000
-        self.update_id = 0
-        self.pair: Optional[Pair] = None
-        self.gran: Optional[Gran] = None
+        """
         self.bind(Event.LEFT_CLICK, self.scroll_start)
         self.bind(Event.LEFT_DRAG, self.scroll_move)
+        self.bind(Event.LEFT_RELEASE, self.scroll_release)
+        self.bind(Event.RESIZE, self.resize)
         self.bind(Event.MOUSE_WHEEL, self.squeeze_or_expand)
-        self.bind(Event.RESIZE, self.resize_callback)
+        self.bind(Event.DOUBLE_CLICK, self.toggle_price_view)
+        """
 
-    def get_height(self):
-        return int(self.cget("height"))
+    def load(self, token: str, pair: Pair, gran: Gran, quote_kind: QuoteKind):
+        if pair == self.pair and gran == self.gran and self.collector is not None:
+            if quote_kind != self.quote_kind:
+                self.quote_kind = quote_kind
+                self.update_candles()
+            return
+        self.token = token
+        self.price_scale = None
+        self.candle_ndx = 0
+        self.pair = pair
+        self.gran = gran
+        self.quote_kind = quote_kind
+        self.fpp = Const.DEFAULT_FPP
+        self.collector = CandleCollector(self.token, pair, gran)
+        self.update_candles()
+        self.enforce_price_view()
+        self.price_scale = PriceScale(self.fpp)
+        self.go_home()
 
-    def get_width(self):
-        return int(self.cget("width"))
+    def y_fp(self, fp: FracPips) -> int:
+        """Get y pixel coord for given FracPips."""
+        return round((self.fp_top - fp) / self.fpp)
 
+    def y_price(self, price: Price) -> int:
+        """Get y pixel coord for given price."""
+        fp = FracPips.from_price(price)
+        return self.y_fp(fp)
+
+    def fp_y(self, y: int) -> FracPips:
+        """Get fractional pips from canvas y coordinate"""
+        return FracPips(self.fp_top - round(y * self.fpp))
+
+    def go_home(self):
+        self.delete(Tag.CANDLE)
+        self.candle_ndx = 0
+        self.price_view = True
+        self.offset = CandleOffset.DEFAULT
+        if self.pair is not None:
+            self.update_candles()
+            self.enforce_price_view()
+            self.update_candles()
+            self.enforce_price_view()
+        self.xview_moveto(Const.ONE_THIRD)
+        self.tailing = True
+        self.start_tail()
+
+    # ---------------------------------------------------------------------------
+    # Event Callbacks
+    # ---------------------------------------------------------------------------
+
+    '''
     def scroll_start(self, event):
+        self.marked_x = event.x
         self.scan_mark(event.x, event.y)
 
     def scroll_move(self, event):
         self.scan_dragto(event.x, event.y, gain=1)
-        if self.loaded:
-            if self.view_price_mode:
-                self.enforce_view_price()
+
+    def scroll_release(self, event):
+        shift = event.x - self.marked_x
+        ndx_shift = round(shift / self.offset)
+        self.delete(Tag.CANDLE)
+        self.candle_ndx += ndx_shift
+        if self.candle_ndx < 0:
+            self.candle_ndx = 0
+        if self.pair is not None:
+            self._update_candles()
+            if self.price_view:
+                self._enforce_price_view()
+        self.xview_moveto(Const.ONE_THIRD)
+        if self._end_in_sight():
+            self.tailing = True
+            self._start_tail()
+        else:
+            self.tailing = False
+
+    def resize(self, event):
+        self._apply_resize(width=event.width, height=event.height)
+        if self.candles:
+            self._apply_resize()
+            self._update_candles()
+            self._apply_resize()
+            if self.price_view:
+                self._apply_resize()
+                self._enforce_price_view()
 
     def squeeze_or_expand(self, event):
         """Squeeze candle offset or expand it according to mouse wheel direction."""
-        if not self.loaded:
+        if not self.candles:
             return
-        old_offset = self.coords.offset
+        old_offset = self.offset
         if event.delta > 0:
             new_offset = CandleOffset(old_offset + 1)
         elif event.delta < 0:
@@ -91,141 +195,210 @@ class ChartCanvas(Canvas):
         else:
             return
         if new_offset != old_offset:
-            # Find the candle position on right side of view before applying new offset.
-            width = self.get_width()
-            right_ndx = self.coords.ndx_x(self.canvasx(width))
-            self.coords.config(offset=new_offset)
-            self.update_scrollregion()
-            # Find the pixel position that now matches the candle position.
-            right_x = self.coords.x_ndx(right_ndx)
-            # And use it to find the where to move view to.
-            left_moveto = self.coords.moveto_x(right_x - width)
-            self.xview_moveto(left_moveto)
-            self.view_price_mode = True
-            self.draw_candles()
-            self.enforce_view_price()
-
-    # def apply_candles(self, candles: CandlesElement):
-    #    self.coords.config(candles=candles)
-    #    self.enforce_view_price()
-    #    self.xview_moveto(1.0)
-    #    self.enforce_view_price()
-
-    # def start_candle_tracking(self, pair: Pair, gran: Gran):
-
-    def load(self, pair: Pair, gran: Gran):
-        self.loaded = True
-        self.pair = pair
-        self.gran = gran
-        self.target_count = 500
-        self.view_price_mode = True
-        candles = CandlesElement(self.pair, self.gran, self.target_count)
-        self.coords.config(candles=candles)
-        self.enforce_view_price()
-        self.xview_moveto(1.0)
-        self.enforce_view_price()
-        self.update_id += 1
-        self._update(self.update_id)
-
-    def unload(self):
-        self.loaded = True
-        self.pair = None
-        self.gran = None
-        self.delete(Tag.CANDLE)
-
-    def _update(self, update_id):
-        if update_id == self.update_id and self.loaded:
-            left_side = self.canvasx(0)
-            if self.target_count < self.max_count and left_side < self.coords.LEFT_PAD:
-                print(self.target_count)
-                self.target_count += 500
-                pixel_position = (500 * self.coords.offset) + left_side
+            self._apply_offset(new_offset)
+            if self.price_view:
+                self._enforce_price_view()
+            if self._end_in_sight():
+                self.tailing = True
+                self._start_tail()
             else:
-                pixel_position = None
-            candles = CandlesElement(self.pair, self.gran, self.target_count)
-            self.coords.config(candles=candles)
-            self.draw_candles()
-            if self.view_price_mode:
-                self.enforce_view_price()
-            if pixel_position is not None:
-                self.xview_moveto(pixel_position / self.coords.width)
-            self.after(1000, self._update, update_id)
+                self.tailing = False
 
-    def go_home(self):
-        self.coords.config(offset=Coords.DEFAULT_OFFSET)
-        self.enforce_view_price()
-        self.xview_moveto(1.0)
-        self.enforce_view_price()
+    def toggle_price_view(self, event):
+        self.price_view = not self.price_view
+    '''
 
-    def view_region(self) -> Tuple[int, int, int, int]:
-        """Return coordinates of current view as canvas region"""
-        return (
-            self.canvasx(0),
-            self.canvasy(0),
-            self.canvasx(self.get_width()),
-            self.canvasy(self.get_height()),
-        )
+    # ---------------------------------------------------------------------------
+    # Helpers
+    # ---------------------------------------------------------------------------
 
-    def enforce_view_price(self):
-        """Adjust so view matches current candle price range.
+    def end_in_sight(self) -> bool:
+        """Determine if last candles are visible in view (or at least close)."""
+        pixels_from_end = self.candle_ndx * self.offset
+        return pixels_from_end < Const.TAIL_PADDING
 
-        The following steps are followed:
-            * Figure out what candles are within width of view.
-            * Find the high/low price of those candles.
-            * Adjust coords.fpp so that range fits height of view.
-            * Redraw items in canvas to reflect coords change.
-            * Move view up or down to those candles.
-        """
-        view_x1, view_y1, view_x2, view_y2 = self.view_region()
-        ndx_1 = self.coords.ndx_x(view_x1)
-        ndx_2 = self.coords.ndx_x(view_x2) + 1
-        x1, y1, x2, y2 = self.coords.candle_region(ndx_1, ndx_2)
-        target_height = 30 + y2 - y1
-        fpp_float = (self.coords.fpp * target_height) / self.get_height()
-        new_fpp = max(math.ceil(fpp_float), 1)
-        self.coords.config(fpp=new_fpp)
+    def start_tail(self):
+        if not self.tailing or self.tail_lock_set:
+            return
+        tail_lock = str(uuid4())
+        self.tail_lock_set.add(tail_lock)
+        self.after(2000, self.tail, tail_lock)
+
+    def tail(self, tail_lock: str):
+        if not self.candles or not self.tailing or tail_lock not in self.tail_lock_set:
+            if tail_lock in self.tail_lock_set:
+                self.tail_lock_set.remove(tail_lock)
+            return
+        # If other locks, then exit unless our lock is first alphabetically
+        if len(self.tail_lock_set) > 1:
+            for other_lock in self.tail_lock_set:
+                if other_lock < tail_lock:
+                    return
+        last_candle = self.candles[-1]
+        new_candles = self.collector.grab(10)
+        found_match = False
+        for new_candle in new_candles:
+            if found_match:
+                self.candles.append(new_candle)
+            if new_candle.time == last_candle.time:
+                found_match = True
+                self.candles[-1] = new_candle
+        if found_match:
+            # For when the grab of 10 candles did not overlap with the latest candle
+            # we already had...we go ahead and do the regular redraw of candles.
+            self.update_candles()
+            self.apply_resize()
+        if self.tailing:
+            self.after(2000, self.tail, tail_lock)
+
+    def apply_resize(self, width: Optional[int] = None, height: Optional[int] = None):
+        """Adjust attributes to reflect current width and height."""
+        if self.fp_top is None or self.fp_bottom is None:
+            return
+        if width is not None:
+            self.view_width = width
+        if height is not None:
+            self.view_height = height
+        self.scroll_width = self.view_width * 3
+        fp_height = self.fp_top - self.fp_bottom
+        self.scroll_height = round(float(fp_height) / self.fpp)
+        self.slots = int(self.scroll_width / self.offset)
+        full_width = (2 * self.view_width) - Const.TAIL_PADDING
+        self.full_slots = round(full_width / self.offset)
+        self.other_slots = self.slots - self.full_slots
+        self.config(scrollregion=(0, 0, self.scroll_width, self.scroll_height))
+
+    def apply_offset(self, offset: CandleOffset):
+        """Apply a new offset (candle width) to chart."""
+        self.offset = CandleOffset(offset)
+        self.apply_resize()
+        self.draw_price_grid()
+        self.update_candles()
+
+    def update_candles(self):
+        self.pull_candles()
+        self.find_top_and_bottom()
+        self.apply_resize()
+        self.draw_mist()
+        self.draw_price_grid()
         self.draw_candles()
-        x1, y1, x2, y2 = self.coords.candle_region(ndx_1, ndx_2)
-        candle_height = y2 - y1
-        margin_pixels = self.get_height() - candle_height
-        half_margin = round(margin_pixels / 2)
-        self.yview_moveto(self.coords.moveto_y(y1 - half_margin))
 
-    def resize_callback(self, event):
-        new_height = event.height - 4
-        new_width = event.width - 4
-        self.config(height=new_height, width=new_width)
-        self.update()
-        print(f"RESIZE CALLBACK: {event.height} {event.width}")
-        print(f"get size: {self.get_height()} {self.get_width()}")
-
-    def update_scrollregion(self):
-        """Update scrollregion of canvas to match self.coords."""
-        region = (0, 0, self.coords.width, self.coords.height)
-        self.config(scrollregion=region)
-
-    def draw_candles(self, quote_kind: QuoteKind = QuoteKind.MID):
+    def draw_candles(self):
         self.delete(Tag.CANDLE)
-        region = (0, 0, self.coords.width, self.coords.height)
-        self.config(scrollregion=region)
-        for ndx, candle in enumerate(self.coords.candles):
-            ohlc = candle.quote(quote_kind)
-            o = self.coords.y_price(ohlc.o)
-            h = self.coords.y_price(ohlc.h)
-            l = self.coords.y_price(ohlc.l)
-            c = self.coords.y_price(ohlc.c)
-            left = self.coords.x_ndx(ndx)
-            right = left + self.coords.offset.far_side()
-            middle = left + self.coords.offset.wick()
-            color = CandleColor if candle.complete else UnfinishedCandleColor
-            self.create_line(middle, l, middle, h, fill=color.WICK, tags=Tag.CANDLE)
-            if ohlc.o < ohlc.c:
-                self.create_rectangle(
-                    left, o, right, c, fill=color.BULL, tags=Tag.CANDLE, width=0.0,
+        num_to_draw = self.slots - self.missing_history - self.future_slots
+        for ndx in range(num_to_draw):
+            candle = self.candles[ndx]
+            slot = self.missing_history + ndx
+            self.draw_candle_at(candle, slot)
+
+    def draw_candle_at(self, candle: Candle, slot: int):
+        ohlc = candle.quote(self.quote_kind)
+        o = self.y_price(ohlc.o)
+        h = self.y_price(ohlc.h)
+        l = self.y_price(ohlc.l)
+        c = self.y_price(ohlc.c)
+        left = slot * self.offset
+        right = left + self.offset.far_side()
+        middle = left + self.offset.wick()
+        color = CandleColor if candle.complete else UnfinishedCandleColor
+        self.create_line(middle, l, middle, h, fill=color.WICK, tags=Tag.CANDLE)
+        if ohlc.o < ohlc.c:
+            self.create_rectangle(
+                left, o, right, c, fill=color.BULL, tags=Tag.CANDLE, width=0.0,
+            )
+        elif ohlc.o > ohlc.c:
+            self.create_rectangle(
+                left, c, right, o, fill=color.BEAR, tags=Tag.CANDLE, width=0.0,
+            )
+        else:
+            self.create_line(left, o, right, o, fill=color.DOJI, tags=Tag.CANDLE)
+
+    def draw_mist(self):
+        self.delete(Tag.MIST)
+        if self.missing_history:
+            x_right = self.missing_history * self.offset
+            self.mist_at(0, 0, x_right, self.scroll_height)
+        if self.future_slots:
+            x_right = self.slots * self.offset
+            x_left = x_right - (self.future_slots * self.offset)
+            if not self.candles[-1].complete:
+                # extend future mist to cover the last candle if its not complete.
+                x_left -= self.offset
+            self.mist_at(x_left, 0, x_right, self.scroll_height)
+
+    def draw_price_grid(self):
+        self.delete(Tag.PRICE_GRID)
+        if self.fpp is None or self.fp_bottom is None or self.fp_top is None:
+            return
+        if self.price_scale is None:
+            return
+        low, high = get_candle_range(self.candles)
+        fp_low = FracPips.from_price(low)
+        fp_high = FracPips.from_price(high)
+        fp_delta = fp_high - fp_low
+        pad = fp_delta * 2
+        fp_high += pad
+        fp_low -= pad
+        for grid_fp in self.price_scale.get_grid_list(self.fp_bottom, self.fp_top):
+            if fp_low <= grid_fp <= fp_high:
+                y = self.y_fp(grid_fp)
+                self.create_line(
+                    0, y, self.scroll_width, y, fill=Color.GRID, tag=Tag.PRICE_GRID
                 )
-            elif ohlc.o > ohlc.c:
-                self.create_rectangle(
-                    left, c, right, o, fill=color.BEAR, tags=Tag.CANDLE, width=0.0,
-                )
+
+    def enforce_price_view(self):
+        """Adjust so that prices fill screen."""
+        if not self.price_view:
+            return
+        remainder = self.slots % 3
+        little_third = round((self.slots - remainder) / 3)
+        big_third = round(self.slots / 3)
+        start_ndx = little_third - self.missing_history
+        end_ndx = min(big_third + little_third + 1, len(self.candles))
+        num_candles = end_ndx - start_ndx
+        if num_candles <= 0:
+            return
+        # Find max and min prices for the current range.
+        fp_min = Const.FP_MAX
+        fp_max = Const.FP_MIN
+        for ndx in range(start_ndx, end_ndx):
+            candle = self.candles[ndx]
+            fp_low = FracPips.from_price(candle.bid.l)
+            fp_high = FracPips.from_price(candle.ask.h)
+            if fp_low < fp_min:
+                fp_min = fp_low
+            if fp_high > fp_max:
+                fp_max = fp_high
+        # figure out how many fractional pips we want to fit into view height.
+        fp_delta = fp_max - fp_min
+        fp_pad = 2 * fp_delta
+        target_height = self.view_height - (2 * Const.PRICE_VIEW_PAD)
+        self.fpp = max((fp_delta / target_height), Const.MIN_FPP)
+        self.update_candles()
+        pixels_down = self.y_fp(fp_max) - Const.PRICE_VIEW_PAD
+        percent_down = float(pixels_down) / float(self.scroll_height)
+        self.yview_moveto(percent_down)
+
+    def find_top_and_bottom(self):
+        """Set top and bottom price of scrollable area.
+
+        We set them very high and low at top and bottom of what the
+        forex_type.Price object considers valid price ranges for either
+        Yen quoted pairs or other pairs.
+        """
+        if self.pair:
+            if self.pair.quote == Currency.JPY:
+                self.fp_top = FracPips.from_price(Price(Price.NINJA_MAX))
+                self.fp_bottom = FracPips.from_price(Price(Price.NINJA_MIN))
             else:
-                self.create_line(left, o, right, o, fill=color.DOJI, tags=Tag.CANDLE)
+                self.fp_top = FracPips.from_price(Price(Price.MAX))
+                self.fp_bottom = FracPips.from_price(Price(Price.MIN))
+
+    def mist_at(self, x1, y1, x2, y2):
+        self.create_rectangle(x1, y1, x2, y2, fill=Color.MIST, width=0.0, tag=Tag.MIST)
+
+    def pull_candles(self):
+        request_num = self.full_slots + self.candle_ndx  # number of candles to request
+        self.candles = self.collector.grab(request_num)  # candles back to first we need
+        self.missing_history = request_num - len(self.candles)
+        self.future_slots = max(0, self.other_slots - self.candle_ndx)
