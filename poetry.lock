@@ -100,7 +100,7 @@ description = "Oanda forex candle API built on top of oandapyV20"
 name = "oanda-candles"
 optional = false
 python-versions = ">=3.5,<4.0"
-version = "0.0.6"
+version = "0.0.8"
 
 [package.dependencies]
 forex-types = ">=0.0.6,<0.0.7"
@@ -254,7 +254,7 @@ description = "HTTP library with thread-safe connection pooling, file post, and 
 name = "urllib3"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, <4"
-version = "1.25.9"
+version = "1.25.10"
 
 [package.extras]
 brotli = ["brotlipy (>=0.6.0)"]
@@ -283,7 +283,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pathlib2", "unittest2", "jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "0a58adaac75ca107acce13c0627b4e556e469342146e842ba48dc05f093bf365"
+content-hash = "1c7589b56f935bf6057aeb01c02ad3a1da2a6143ca0c5efcd7b2b5457f53bdae"
 python-versions = "^3.5"
 
 [metadata.files]
@@ -328,8 +328,8 @@ more-itertools = [
     {file = "more_itertools-8.4.0-py3-none-any.whl", hash = "sha256:b78134b2063dd214000685165d81c154522c3ee0a1c0d4d113c80361c234c5a2"},
 ]
 oanda-candles = [
-    {file = "oanda-candles-0.0.6.tar.gz", hash = "sha256:341ee75b005297347b2d3678626cfcf8413b283103efc4a4658acce4d69c0de6"},
-    {file = "oanda_candles-0.0.6-py3-none-any.whl", hash = "sha256:1ad930526896dc93edf155683817ddd9f52fa37f1090e48b01245c064189c202"},
+    {file = "oanda-candles-0.0.8.tar.gz", hash = "sha256:912639972c4814ae8348989acc92e6dd3d6ae6ddaeac43c1097240ac5fd10224"},
+    {file = "oanda_candles-0.0.8-py3-none-any.whl", hash = "sha256:f3486356026c979c2d4c15518d1cfca15c19e960108c2b65e6b74fa749151559"},
 ]
 oandapyv20 = [
     {file = "oandapyV20-0.6.3.tar.gz", hash = "sha256:173a56b41ab3a19315c2fbea6f9aa3f0c17f64ba84acff014d072c64c1844b28"},
@@ -375,8 +375,8 @@ tk-oddbox = [
     {file = "tk_oddbox-0.0.3-py3-none-any.whl", hash = "sha256:705798fd7996c50febdc32f05f2e9a9da86e7c1f5463fa9ad4592c2e2acfd1b8"},
 ]
 urllib3 = [
-    {file = "urllib3-1.25.9-py2.py3-none-any.whl", hash = "sha256:88206b0eb87e6d677d424843ac5209e3fb9d0190d0ee169599165ec25e9d9115"},
-    {file = "urllib3-1.25.9.tar.gz", hash = "sha256:3018294ebefce6572a474f0604c2021e33b3fd8006ecd11d62107a5d2a963527"},
+    {file = "urllib3-1.25.10-py2.py3-none-any.whl", hash = "sha256:e7983572181f5e1522d9c98453462384ee92a0be7fac5f1413a1e35c56cc0461"},
+    {file = "urllib3-1.25.10.tar.gz", hash = "sha256:91056c15fa70756691db97756772bb1eb9678fa585d9184f24534b100dc60f4a"},
 ]
 wcwidth = [
     {file = "wcwidth-0.2.5-py2.py3-none-any.whl", hash = "sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784"},
