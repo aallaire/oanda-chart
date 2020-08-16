@@ -1,4 +1,4 @@
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 from oanda_candles.gran import Gran
 from forex_types.pair import Pair
