@@ -8,7 +8,10 @@ class PriceScale:
 
     NUM_GRID = 6
 
-    MIN_PIXEL = 100
+    MIN_PIXEL = 80
+
+    DEFAULT_FPP: float = 1.0
+    DEFAULT: "PriceScale" = None
 
     # Different numbers of pips we might have between each grid line.
     INTERVALS = (
@@ -56,6 +59,9 @@ class PriceScale:
                 self.interval = interval
                 break
 
+    def __repr__(self):
+        return f"<Scale {self.interval}>"
+
     def get_grid_list(self, fp_low: FracPips, fp_high: FracPips) -> List[FracPips]:
         """Return list of fractional pips to put grid lines at.
 
@@ -65,8 +71,11 @@ class PriceScale:
         """
         grid_list: List[FracPips] = []
         remainder = fp_low % self.interval
-        grid_fp = fp_low - remainder
+        grid_fp = FracPips(fp_low - remainder)
         while grid_fp <= fp_high:
             grid_list.append(grid_fp)
             grid_fp = FracPips(grid_fp + self.interval)
         return grid_list
+
+
+PriceScale.DEFAULT = PriceScale(PriceScale.DEFAULT_FPP)

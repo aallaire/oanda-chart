@@ -1,3 +1,7 @@
+from math import ceil
+
+from oanda_chart.env.const import Const
+
 # Map of total candle offset to tuples of:
 #   * offset to the wick
 #   * offset to far end of candle body
@@ -41,6 +45,7 @@ class CandleOffset(int):
     MAX = 30
     MIN = 1
     DEFAULT = 10
+    REQUIRED_RUN_SIZE = 200.0
 
     def __new__(cls, value: int):
         if value < cls.MIN:
@@ -57,6 +62,12 @@ class CandleOffset(int):
 
     def gap(self):
         return OffsetMap[self][2]
+
+    def grid_adjust(self):
+        return OffsetMap[self][2] // 2
+
+    def min_run(self) -> int:
+        return ceil(float(Const.MIN_TIME_GRID_WIDTH) / float(self))
 
 
 # Cast MIN, MAX, and DEFAULT as CandleOffsets rather than normal ints.

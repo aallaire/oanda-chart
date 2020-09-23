@@ -48,7 +48,7 @@ from typing import Union, Optional
 from oanda_chart.env.const import Event
 
 from oanda_chart.env.link_color import LinkColor
-from oanda_chart.widgets.selector import PairSelector
+from oanda_chart.selectors.selector import PairSelector
 from oanda_chart.env.initializer import Initializer
 from oanda_chart.util.syntax_candy import grid
 

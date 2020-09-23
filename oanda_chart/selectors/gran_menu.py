@@ -1,12 +1,11 @@
 from tkinter import Widget, StringVar, Menubutton, Menu
 from oanda_candles import Gran
-from magic_kind import MagicKind
 from typing import Optional
 from functools import partial
 
 from oanda_chart.util.syntax_candy import grid
 from oanda_chart.env.fonts import Fonts
-from oanda_chart.widgets.selector import GranSelector
+from oanda_chart.selectors.selector import GranSelector
 
 
 class GranMenu(GranSelector):
@@ -69,9 +68,12 @@ class GranMenu(GranSelector):
         Gran.M4,
         Gran.M2,
         Gran.M1,
+    )
+    """
         None,
         Gran.S30,
         Gran.S15,
         Gran.S10,
         Gran.S5,
     )
+    """
