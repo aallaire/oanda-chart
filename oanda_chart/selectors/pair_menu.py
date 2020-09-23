@@ -20,6 +20,8 @@ class PairMenu(PairSelector):
             width=7,
             background=color,
             foreground=color.contrast,
+            bd=0,
+            pady=6,
         )
         self.menu = Menu(
             self.menubutton,

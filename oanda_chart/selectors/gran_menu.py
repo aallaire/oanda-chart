@@ -19,6 +19,8 @@ class GranMenu(GranSelector):
             width=10,
             background=color,
             foreground=color.contrast,
+            bd=0,
+            pady=6,
         )
         self.menu = Menu(
             self.menubutton,

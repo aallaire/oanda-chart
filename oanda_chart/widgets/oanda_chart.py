@@ -33,9 +33,8 @@ class OandaChart(Frame):
     ):
         """Do NOT initialize directly, use ChartManager.get_chart method"""
         Initializer.initialize(parent.winfo_toplevel())
-        # Frame.__init__(self, parent, width=width, height=height)
-        Frame.__init__(self, parent)
-        self.top = Frame(self, background=Color.TOP_BG)
+        Frame.__init__(self, parent, background=Color.LINK_BG)
+        self.top = Frame(self, background=Color.LINK_BG)
         self.geo: Optional[GeoCandles] = None
         self.chart = ChartCanvas(self, width, height)
         self.prices = PriceCanvas(self, height)
@@ -357,11 +356,9 @@ class OandaChart(Frame):
             self.after(100, self._inner_update_runner, run_id)
 
     def _inner_update_runner(self, run_id: str):
-        print(f"Inner Update Runner, self.pair is {self.pair}")
-        if not self.geo.xandles.showing_recent or self.pair is not None:
+        if not self.geo.xandles.showing_recent or self.pair is None:
             self.run_id = None
         if self.run_id == run_id:
-            print(f"REFRESHING!!! with self.run_id {self.run_id} and run_id {run_id}")
             self.geo.refresh()
             self.chart.redraw(self.geo)
             self.prices.redraw(self.geo)
