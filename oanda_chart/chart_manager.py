@@ -2,26 +2,26 @@ import tkinter
 from typing import Optional
 
 from forex_types import Pair
-from oanda_candles import Gran
+from oanda_candles import CandleMeister, Gran
 from oanda_candles.quote_kind import QuoteKind
 
 from oanda_chart.env.link_color import LinkColor
-from oanda_chart.chart_widgets.oanda_chart import OandaChart
-from oanda_chart.widgets.gran_menu import GranMenu
-from oanda_chart.widgets.pair_menu import PairMenu
-from oanda_chart.widgets.pair_flags import Geometry, PairFlags
-from oanda_chart.widgets.quote_kind_menu import QuoteKindMenu
+
+from oanda_chart.widgets.oanda_chart import OandaChart
+from oanda_chart.selectors.gran_menu import GranMenu
+from oanda_chart.selectors.pair_menu import PairMenu
+from oanda_chart.selectors.pair_flags import Geometry, PairFlags
+from oanda_chart.selectors.quote_kind_menu import QuoteKindMenu
 
 
 class ChartManager:
-    def __init__(self, token: str):
+    def __init__(self, token: str, real: bool = False):
         """Initialize manager.
 
         Args:
             token: oanda V20 access token used to get candle data
         """
-        self.token = token
-        OandaChart.set_oanda_token(token)
+        CandleMeister.init_meister(token, real=real)
         self.charts = set()
         self.pair_selectors = set()
         self.gran_selectors = set()
@@ -76,9 +76,30 @@ class ChartManager:
         gran_color: LinkColor = LinkColor.ChartDefault,
         quote_kind_color: LinkColor = LinkColor.ChartDefault,
         flags: bool = False,
+        width: int = 0,
+        height: int = 0,
     ) -> OandaChart:
+        """Create Oanda Chart.
+
+        Note that the width and height are for dimensions of the view area
+        that shows candles. The height also pertains to the height of the price
+        scale to the right, and the width to the time scale on bottom. The width
+        and height of the entire OandaChart frame will be larger since it includes
+        more than just the candle area.
+
+        Args:
+            parent: tkinter widget that chart will belong to.
+            pair_color: LinkColor for pair that is selected
+            gran_color: LinkColor for granularity that is selected
+            quote_kind_color: LinkColor for quote kind that is selected
+            flags: option to include flag icon pair selector in chart.
+            width: width of candle area in pixels (chart widget will be larger).
+            height: height of candle area in pixels (chart widget will be larger).
+        Returns:
+            OandaChart Frame
+        """
         chart = OandaChart(
-            parent, self, pair_color, gran_color, quote_kind_color, flags
+            parent, self, pair_color, gran_color, quote_kind_color, flags, width, height
         )
         chart.set_pair(self.get_pair(pair_color))
         chart.set_gran(self.get_gran(gran_color))

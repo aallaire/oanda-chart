@@ -19,6 +19,27 @@ the instrument pair, granularity, and ask/mid/bid.
 
 ### Version Notes
 
+#### 0.1.0
+Big rework. Now has price and time scales. Changes include:
+
+1. Price scale, which can be stretched with mouse to make candles appear taller or shorter.
+1. Time scale, which can be stretched with the mouse to make candles wider or narrower, similar to mouse wheel.
+1. Both time and price grid lines aligning with scales.
+1. Badge in background declaring the instrument pair, granularity, and whether its bid, mid, or ask.
+1. Panning up or down will take one out of price view mode.
+1. When chart is in focus (which it becomes when panning it) user can use arrow keys on keyboard to move in chart.
+1. Enter key on keyboard snaps back to price view mode.
+1. In bottom right corner the pips between price grid lines and time interval between time grid lines is shown.
+1. Clicking this bottom right corner area snaps chart view back to the default way the chart was set when loaded.
+1. The user should not be able to tell, but the scrollable canvas area is now only three times bigger than the viewing area in all directions.
+1. Candle times are now aligned on UTC (for example monthly candles start right when the month changes in UTC)
+1. The time scale and time on the Candle objects are in UTC (and no longer local or New York time)
+1. Features have not been greatly tested, and code got a huge rewrite that could be cleaned up.
+
+###### Still Missing features
+1. No geometric annotation items like price lines or rectangles etc are implemented yet...but they are what is being looked at next.
+1. No configuration of colors is available yet--all colors are just hard coded with a darkish look.
+
 #### 0.0.4
 Overall, I think the core functionality is finally taking shape. Still seriously missing parts, particularly price scale on right and time scale on
  bottom. And there are no drawing utilities yet. What I am happy with is that panning around and candle display and such feel reasonably comparable to "real" candle charts used by retail brokers.

@@ -6,7 +6,7 @@ from functools import partial
 
 from oanda_chart.util.syntax_candy import grid
 from oanda_chart.env.fonts import Fonts
-from oanda_chart.widgets.selector import PairSelector
+from oanda_chart.selectors.selector import PairSelector
 
 
 class PairMenu(PairSelector):
@@ -20,6 +20,8 @@ class PairMenu(PairSelector):
             width=7,
             background=color,
             foreground=color.contrast,
+            bd=0,
+            pady=6,
         )
         self.menu = Menu(
             self.menubutton,
