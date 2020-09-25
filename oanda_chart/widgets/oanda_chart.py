@@ -86,9 +86,7 @@ class OandaChart(Frame):
 
     def set_pair(self, pair: Pair):
         """Set the pair and reload data if its new."""
-        print(f"SET PAIR WITH {pair} when we have {self.pair}")
         if pair != self.pair:
-            print(f"Setting pair to {pair}")
             self.pair = pair
             self.load_candles()
 
