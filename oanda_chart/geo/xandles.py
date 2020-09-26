@@ -43,7 +43,7 @@ class Xandles:
     of pixels from left of scrollable area to draw each candle.
     """
 
-    PAD = 50
+    PAD = 100
 
     def __init__(
         self,

@@ -1,6 +1,9 @@
 # oanda-chart
 Oanda forex candle chart tkinter widget.
 
+# Video Demo
+[YouTube demo of chart widget](https://youtu.be/rPa5l9m_QI8)
+
 #### Quick Sample of Usage
 This code is a complete script for a working chart provided that:
 1. There is a working internet connection.

@@ -175,17 +175,24 @@ class OandaChart(Frame):
         self.prices.scan_mark(0, event.y)
         self.times.scan_mark(event.x, 0)
 
-    def scroll_move(self, event):
-        x_delta = abs(event.x - self.marked_x)
-        y_delta = abs(event.y - self.marked_y)
-        self.update_runner()
-        self.chart.scan_dragto(event.x, event.y, gain=1)
-        self.prices.scan_dragto(0, event.y, gain=1)
-        self.times.scan_dragto(event.x, 0, gain=1)
+    def quick_draw(self):
         self.chart.draw_badge(self.geo)
         self.chart.draw_price_grid(self.geo)
         self.chart.draw_time_grid(self.geo)
         self.chart.draw_candles(self.geo)
+
+    def full_draw(self):
+        self.chart.redraw(self.geo)
+        self.prices.redraw(self.geo)
+        self.scales.redraw(self.geo)
+        self.times.redraw(self.geo)
+
+    def scroll_move(self, event):
+        self.update_runner()
+        self.chart.scan_dragto(event.x, event.y, gain=1)
+        self.prices.scan_dragto(0, event.y, gain=1)
+        self.times.scan_dragto(event.x, 0, gain=1)
+        self.quick_draw()
 
     def step_up(self, event):
         self.geo.update(price_view=False)
@@ -193,10 +200,7 @@ class OandaChart(Frame):
         self.update_runner()
         self.chart.scan_dragto(0, y_shift)
         self.geo.shift(0, y_shift)
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def step_down(self, event):
         self.geo.update(price_view=False)
@@ -204,30 +208,21 @@ class OandaChart(Frame):
         self.update_runner()
         self.chart.scan_dragto(0, y_shift)
         self.geo.shift(0, y_shift)
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def step_left(self, event):
         x_shift = -1 * ceil(self.geo.xandles.width / 4)
         self.chart.scan_dragto(x_shift, 0)
         self.update_runner()
         self.geo.shift(x_shift, 0)
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def step_right(self, event):
         x_shift = ceil(self.geo.xandles.width / 4)
         self.chart.scan_dragto(x_shift, 0)
         self.geo.shift(x_shift, 0)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def prices_scroll_start(self, event):
         self.price_mark = event.y
@@ -248,9 +243,7 @@ class OandaChart(Frame):
             return
         self.geo.update(fpp=new_fpp)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
+        self.full_draw()
         self.price_mark = event.y
 
     def scroll_release(self, event):
@@ -263,10 +256,7 @@ class OandaChart(Frame):
         self.chart.scan_dragto(event.x, event.y, gain=1)
         self.geo.shift(shift_x, shift_y)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def go_home(self, event):
         self.geo.xandles.go_home()
@@ -274,9 +264,7 @@ class OandaChart(Frame):
         self.chart.redraw(self.geo)
         self.geo.yrids.view_set(self.geo.xandles)
         self.update_runner()
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def resize(self, event):
         self.event_width = event.width
@@ -287,10 +275,7 @@ class OandaChart(Frame):
             width=event.width, height=event.height, price_view=self.geo.price_view
         )
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def squeeze_or_expand(self, event):
         old_offset = self.geo.xandles.offset
@@ -302,10 +287,7 @@ class OandaChart(Frame):
             return
         self.geo.update(offset=new_offset, price_view=self.geo.price_view)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def times_squeeze_or_expand(self, event):
         delta = self.time_mark - event.x
@@ -323,26 +305,18 @@ class OandaChart(Frame):
             return
         self.geo.update(offset=new_offset, price_view=self.geo.price_view)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def default_squeeze(self, event):
         new_offset = CandleOffset.DEFAULT
         self.geo.update(offset=new_offset, price_view=self.geo.price_view)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
-        self.times.redraw(self.geo)
+        self.full_draw()
 
     def apply_price_view(self, event):
         self.geo.update(price_view=True)
         self.update_runner()
-        self.chart.redraw(self.geo)
-        self.prices.redraw(self.geo)
-        self.scales.redraw(self.geo)
+        self.full_draw()
 
     def update_runner(self):
         if (
@@ -358,8 +332,5 @@ class OandaChart(Frame):
             self.run_id = None
         if self.run_id == run_id:
             self.geo.refresh()
-            self.chart.redraw(self.geo)
-            self.prices.redraw(self.geo)
-            self.scales.redraw(self.geo)
-            self.times.redraw(self.geo)
+            self.full_draw()
             self.after(5000, self._inner_update_runner, run_id)
