@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "oanda-chart"
-version = "0.1.2"
+version = "0.1.3"
 description = "Oanda forex candle chart tkinter widget."
 authors = ["Andrew Allaire <andrew.allaire@gmail.com>"]
 license = "MIT"
